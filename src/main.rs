@@ -1,11 +1,13 @@
 mod csv;
 
 use crate::csv::{custom_date_format, get_birthdays};
-use chrono::{NaiveDate, Utc};
-use iced::widget::{column, text};
-use iced::widget::{container, row};
-use iced::{Alignment, Element, Length, Padding, Sandbox, Settings};
+use chrono::{Datelike, NaiveDate, Utc};
 use serde::Deserialize;
+use std::rc::Rc;
+
+use iced::time::{every, Duration, Instant};
+use iced::widget::{column, container, row, text};
+use iced::{Alignment, Application, Command, Element, Length, Settings, Subscription};
 
 fn print_help(args: &Vec<String>) {
     println!("Show birthdays from csv file in window\n");
@@ -16,7 +18,7 @@ fn print_help(args: &Vec<String>) {
 pub struct Birthday {
     last_name: String,
     first_name: String,
-    #[serde(with = "custom_date_format")]
+    #[serde(deserialize_with = "custom_date_format::deserialize")]
     birthday: NaiveDate,
     gender: char,
     image_url: Option<String>,
@@ -25,7 +27,7 @@ pub struct Birthday {
 }
 
 impl Birthday {
-    pub fn gen_column(&self) -> Element<Message> {
+    pub fn view(&self) -> Element<Message> {
         let pronoun = match self.gender {
             'm' | 'M' => "Herr ",
             'f' | 'F' | 'w' | 'W' => "Frau ",
@@ -51,17 +53,38 @@ impl Birthday {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum Message {}
-
-struct BirthdayDisplay {
-    all_birthdays: Vec<Birthday>,
-    birthdays_today: Vec<Birthday>,
+pub enum Message {
+    UpdateDay(Instant),
 }
 
-impl Sandbox for BirthdayDisplay {
-    type Message = Message;
+struct BirthdayDisplay {
+    all_birthdays: Vec<Rc<Birthday>>,
+    birthdays_today: Vec<Rc<Birthday>>,
+}
 
-    fn new() -> Self {
+impl BirthdayDisplay {
+    fn update_day(&mut self) {
+        let today = NaiveDate::from(Utc::now().date_naive());
+        let mut birthdays_today = Vec::new();
+
+        for birthday in &self.all_birthdays {
+            if birthday.birthday.day() == today.day() && birthday.birthday.month() == today.month()
+            {
+                birthdays_today.push(Rc::clone(birthday));
+            }
+        }
+
+        self.birthdays_today = birthdays_today;
+    }
+}
+
+impl Application for BirthdayDisplay {
+    type Executor = iced::executor::Default;
+    type Message = Message;
+    type Theme = iced::theme::Theme;
+    type Flags = ();
+
+    fn new(_flags: ()) -> (Self, Command<Message>) {
         // read commandline arguments
         let args: Vec<String> = std::env::args().collect();
         if args.len() != 2 {
@@ -81,25 +104,32 @@ impl Sandbox for BirthdayDisplay {
             }
         };
 
-        Self {
-            all_birthdays: Vec::new(),
-            birthdays_today: birthdays,
-        }
+        let mut birthday_display = Self {
+            all_birthdays: birthdays,
+            birthdays_today: Vec::new(),
+        };
+
+        birthday_display.update_day();
+
+        (birthday_display, Command::none())
     }
 
     fn title(&self) -> String {
         String::from("Birthday Display")
     }
 
-    fn update(&mut self, _message: Self::Message) {
-        todo!()
+    fn update(&mut self, message: Self::Message) -> Command<Message> {
+        match message {
+            Message::UpdateDay(_) => self.update_day(),
+        }
+        Command::none()
     }
 
     fn view(&self) -> Element<Self::Message> {
         let mut elements = Vec::new();
 
         for birthday in &self.birthdays_today {
-            elements.push(birthday.gen_column());
+            elements.push(birthday.view());
         }
 
         container(row(elements).spacing(15))
@@ -109,6 +139,10 @@ impl Sandbox for BirthdayDisplay {
             .center_x()
             .center_y()
             .into()
+    }
+
+    fn subscription(&self) -> Subscription<Self::Message> {
+        every(Duration::from_secs(60)).map(Message::UpdateDay)
     }
 }
 
