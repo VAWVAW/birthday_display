@@ -6,8 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies.iced]
-version = "0.7"
-features = [ "smol" ]
+version = "0"
+features = [ "tokio", "image" ]
 
 [dependencies.serde]
 version = "1"
@@ -19,3 +19,4 @@ features = [ "serde" ]
 
 [dependencies]
 csv = "1"
+reqwest = "0"

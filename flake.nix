@@ -19,6 +19,7 @@
             pkg-config
             fontconfig
             vulkan-loader
+            openssl
 
             # WINIT_UNIX_BACKEND=wayland
             wayland
