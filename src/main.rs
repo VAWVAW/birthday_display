@@ -3,17 +3,18 @@ mod csv;
 use crate::csv::{custom_date_format, get_birthdays};
 
 use std::borrow::Cow;
-use std::sync::{Arc, Mutex};
+use std::cell::RefCell;
+use std::rc::Rc;
 
 use chrono::{Datelike, NaiveDate, Utc};
 use reqwest::{Client, RequestBuilder};
 use serde::Deserialize;
 
+use iced::alignment::{Horizontal, Vertical};
 use iced::time::{every, Duration, Instant};
 use iced::widget::image::Handle;
-use iced::widget::{column, container, row, Column, Image, Text, text};
+use iced::widget::{column, container, row, text, Column, Image, Text};
 use iced::{Alignment, Application, Color, Command, Element, Length, Settings, Subscription};
-use iced::alignment::{Horizontal, Vertical};
 
 fn print_help(args: &Vec<String>) {
     println!("Show birthdays from csv file in window\n");
@@ -29,7 +30,7 @@ pub struct Birthday {
     gender: char,
     image_url: Option<String>,
     #[serde(skip)]
-    image_data: Mutex<Option<Result<Handle, String>>>,
+    image_data: RefCell<Option<Result<Handle, String>>>,
 }
 
 impl Birthday {
@@ -54,7 +55,7 @@ impl Birthday {
         };
         let mut column: Column<Message> = column![text(banner_str).size(20)];
 
-        if let Some(maybe_image) = &*self.image_data.lock().unwrap() {
+        if let Some(maybe_image) = &*self.image_data.borrow() {
             match maybe_image {
                 Ok(image_data) => {
                     let image: Image = Image::new((*image_data).clone()).into();
@@ -79,10 +80,13 @@ impl Birthday {
 #[derive(Debug)]
 pub enum Message {
     UpdateDay(Instant),
-    DataReceived,
+    DataReceived(Result<Handle, String>, String),
 }
 
-async fn request_birthday_image(request: RequestBuilder, birthday: Arc<Birthday>) -> Message {
+async fn request_birthday_image(
+    request: RequestBuilder,
+    orig_url: String,
+) -> (Result<Handle, String>, String) {
     let result = match request.send().await {
         Ok(response) => match response.error_for_status() {
             Ok(response) => response.bytes().await,
@@ -91,24 +95,20 @@ async fn request_birthday_image(request: RequestBuilder, birthday: Arc<Birthday>
         Err(error) => Err(error),
     };
 
-    let mut image = birthday.image_data.lock().unwrap();
-
-
-    let image_data = Some(match result {
+    let image_data = match result {
         Ok(bytes) => {
             let cow: Cow<'_, [u8]> = Cow::from(bytes.to_vec());
             Ok(Handle::from_memory(cow))
         }
         Err(_error) => Err(String::from("[failed to load image]")),
-    });
+    };
 
-    *image = image_data;
-    Message::DataReceived
+    (image_data, orig_url)
 }
 
 struct BirthdayDisplay {
-    all_birthdays: Vec<Arc<Birthday>>,
-    birthdays_today: Vec<Arc<Birthday>>,
+    all_birthdays: Vec<Rc<Birthday>>,
+    birthdays_today: Vec<Rc<Birthday>>,
 }
 
 impl BirthdayDisplay {
@@ -119,7 +119,7 @@ impl BirthdayDisplay {
         for birthday in &self.all_birthdays {
             if birthday.birthday.day() == today.day() && birthday.birthday.month() == today.month()
             {
-                birthdays_today.push(Arc::clone(birthday));
+                birthdays_today.push(Rc::clone(birthday));
             }
         }
 
@@ -155,7 +155,7 @@ impl Application for BirthdayDisplay {
         };
 
         // prepare loading of images
-        let loadable_elements: Vec<&Arc<Birthday>> = birthdays
+        let loadable_elements: Vec<&Rc<Birthday>> = birthdays
             .iter()
             .filter(|birthday| birthday.image_url.is_some())
             .collect();
@@ -175,9 +175,9 @@ impl Application for BirthdayDisplay {
                 requests.push(Command::perform(
                     request_birthday_image(
                         client.get(birthday.image_url.as_ref().unwrap()),
-                        Arc::clone(birthday),
+                        birthday.image_url.as_ref().unwrap().clone(),
                     ),
-                    |x| x,
+                    |(data, url)| Message::DataReceived(data, url),
                 ));
             }
             command = Command::batch(requests);
@@ -200,7 +200,16 @@ impl Application for BirthdayDisplay {
     fn update(&mut self, message: Self::Message) -> Command<Message> {
         match message {
             Message::UpdateDay(_) => self.update_day(),
-            _ => {}
+            Message::DataReceived(image_data, orig_url) => {
+                let url = Some(orig_url);
+                for birthday in self
+                    .all_birthdays
+                    .iter()
+                    .filter(|birthday| birthday.image_url == url)
+                {
+                    birthday.image_data.replace(Some(image_data.clone()));
+                }
+            }
         }
         Command::none()
     }
