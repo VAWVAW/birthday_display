@@ -1,6 +1,5 @@
-use crate::Birthday;
+use crate::Person;
 use std::error::Error;
-use std::rc::Rc;
 
 // add parsing for custom date format
 // https://serde.rs/custom-date-format.html
@@ -19,21 +18,20 @@ pub mod custom_date_format {
     }
 }
 
-pub fn get_birthdays(path: &str) -> Result<Vec<Rc<Birthday>>, Box<dyn Error>> {
+pub fn get_persons(path: &str) -> Result<Vec<Person>, Box<dyn Error>> {
     let mut reader = csv::ReaderBuilder::new()
         .has_headers(false)
         .from_path(path)?;
-    let mut birthdays: Vec<Rc<Birthday>> = Vec::new();
+    let mut persons: Vec<Person> = Vec::new();
 
     for result in reader.deserialize() {
-        let birthday: Rc<Birthday> = match result {
-            Ok(birthday) => Rc::new(birthday),
-            Err(error) => {
-                eprintln!("error reading line: {:?}", error);
-                continue;
-            }
-        };
-        birthdays.push(birthday);
+        if let Ok(person) = result {
+            persons.push(person);
+        }
+        else {
+            let error = result.unwrap_err();
+            eprintln!("error reading line: {:?}", error);
+        }
     }
-    Ok(birthdays)
+    Ok(persons)
 }

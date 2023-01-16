@@ -1,16 +1,13 @@
 mod csv;
 
-use crate::csv::{custom_date_format, get_birthdays};
+use crate::csv::{custom_date_format, get_persons};
 
 use std::borrow::Cow;
-use std::cell::RefCell;
-use std::rc::Rc;
 
 use chrono::{Datelike, NaiveDate, Utc};
 use reqwest::{Client, RequestBuilder};
 use serde::Deserialize;
 
-use iced::alignment::{Horizontal, Vertical};
 use iced::time::{every, Duration, Instant};
 use iced::widget::image::Handle;
 use iced::widget::{column, container, row, text, Column, Image, Text};
@@ -22,7 +19,7 @@ fn print_help(args: &Vec<String>) {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct Birthday {
+pub struct Person {
     last_name: String,
     first_name: String,
     #[serde(deserialize_with = "custom_date_format::deserialize")]
@@ -30,10 +27,10 @@ pub struct Birthday {
     gender: char,
     image_url: Option<String>,
     #[serde(skip)]
-    image_data: RefCell<Option<Result<Handle, String>>>,
+    image_data: Option<Result<Handle, String>>,
 }
 
-impl Birthday {
+impl Person {
     pub fn view(&self) -> Element<Message> {
         let pronoun = match self.gender {
             'm' | 'M' => "Herr ",
@@ -43,10 +40,7 @@ impl Birthday {
         let banner_str = match Utc::now().date_naive().years_since(self.birthday) {
             Some(age) => format!(
                 "{}{} {} wird heute {} Jahre alt.",
-                pronoun,
-                self.first_name,
-                self.last_name,
-                age.to_string()
+                pronoun, self.first_name, self.last_name, age
             ),
             None => format!(
                 "{}{} {} hat heute Geburtstag.",
@@ -55,7 +49,7 @@ impl Birthday {
         };
         let mut column: Column<Message> = column![text(banner_str).size(20)];
 
-        if let Some(maybe_image) = &*self.image_data.borrow() {
+        if let Some(maybe_image) = &self.image_data {
             match maybe_image {
                 Ok(image_data) => {
                     let image: Image = Image::new((*image_data).clone()).into();
@@ -65,8 +59,6 @@ impl Birthday {
                     let text: Text = text(error)
                         .size(20)
                         .style(Color::from_rgb(0.7, 0.0, 0.0))
-                        .vertical_alignment(Vertical::Center)
-                        .horizontal_alignment(Horizontal::Center)
                         .into();
                     column = column.push(text);
                 }
@@ -107,23 +99,21 @@ async fn request_birthday_image(
 }
 
 struct BirthdayDisplay {
-    all_birthdays: Vec<Rc<Birthday>>,
-    birthdays_today: Vec<Rc<Birthday>>,
+    persons: Vec<Person>,
+    indexes_birthdays_today: Vec<usize>,
 }
 
 impl BirthdayDisplay {
     fn update_day(&mut self) {
-        let today = NaiveDate::from(Utc::now().date_naive());
-        let mut birthdays_today = Vec::new();
+        let today = Utc::now().date_naive();
+        self.indexes_birthdays_today.clear();
 
-        for birthday in &self.all_birthdays {
-            if birthday.birthday.day() == today.day() && birthday.birthday.month() == today.month()
+        for (i, person) in self.persons.iter().enumerate() {
+            if person.birthday.day() == today.day() && person.birthday.month() == today.month()
             {
-                birthdays_today.push(Rc::clone(birthday));
+                self.indexes_birthdays_today.push(i);
             }
         }
-
-        self.birthdays_today = birthdays_today;
     }
 }
 
@@ -146,8 +136,8 @@ impl Application for BirthdayDisplay {
         }
 
         // load data
-        let birthdays = match get_birthdays(&args[1]) {
-            Ok(birthdays) => birthdays,
+        let persons = match get_persons(&args[1]) {
+            Ok(persons) => persons,
             Err(error) => {
                 eprintln!("{}", error);
                 std::process::exit(1);
@@ -155,13 +145,15 @@ impl Application for BirthdayDisplay {
         };
 
         // prepare loading of images
-        let loadable_elements: Vec<&Rc<Birthday>> = birthdays
-            .iter()
-            .filter(|birthday| birthday.image_url.is_some())
-            .collect();
+        let mut loadable_indexes: Vec<usize> = Vec::new();
+        for (i, person) in persons.iter().enumerate() {
+            if person.image_url.is_some() {
+                loadable_indexes.push(i);
+            }
+        }
 
         // try to generate reqwest client if needed
-        let reqwest_client = match loadable_elements.len() {
+        let reqwest_client = match loadable_indexes.len() {
             0 => None,
             _ => Client::builder().build().ok(),
         };
@@ -170,23 +162,24 @@ impl Application for BirthdayDisplay {
         let mut command = Command::none();
 
         if let Some(client) = reqwest_client {
-            let mut requests = Vec::new();
-            for birthday in loadable_elements {
-                requests.push(Command::perform(
+            let mut request_commands = Vec::new();
+            for i in loadable_indexes {
+                let person: &Person = persons.get(i).unwrap();
+                request_commands.push(Command::perform(
                     request_birthday_image(
-                        client.get(birthday.image_url.as_ref().unwrap()),
-                        birthday.image_url.as_ref().unwrap().clone(),
+                        client.get(person.image_url.as_ref().unwrap()),
+                        person.image_url.as_ref().unwrap().clone(),
                     ),
                     |(data, url)| Message::DataReceived(data, url),
                 ));
             }
-            command = Command::batch(requests);
+            command = Command::batch(request_commands);
         }
 
         // display initial data
         let mut birthday_display = Self {
-            all_birthdays: birthdays,
-            birthdays_today: Vec::new(),
+            persons,
+            indexes_birthdays_today: Vec::new(),
         };
         birthday_display.update_day();
 
@@ -202,12 +195,10 @@ impl Application for BirthdayDisplay {
             Message::UpdateDay(_) => self.update_day(),
             Message::DataReceived(image_data, orig_url) => {
                 let url = Some(orig_url);
-                for birthday in self
-                    .all_birthdays
-                    .iter()
-                    .filter(|birthday| birthday.image_url == url)
-                {
-                    birthday.image_data.replace(Some(image_data.clone()));
+                for person in &mut self.persons {
+                    if person.image_url == url {
+                        person.image_data.replace(image_data.clone());
+                    }
                 }
             }
         }
@@ -217,8 +208,8 @@ impl Application for BirthdayDisplay {
     fn view(&self) -> Element<Self::Message> {
         let mut elements = Vec::new();
 
-        for birthday in &self.birthdays_today {
-            elements.push(birthday.view());
+        for i in &self.indexes_birthdays_today {
+            elements.push(self.persons.get(*i).unwrap().view());
         }
 
         container(row(elements).spacing(15))
