@@ -1,5 +1,7 @@
-use crate::Person;
+use crate::person::Person;
+
 use std::error::Error;
+use std::path::PathBuf;
 
 // add parsing for custom date format
 // https://serde.rs/custom-date-format.html
@@ -18,7 +20,7 @@ pub mod custom_date_format {
     }
 }
 
-pub fn get_persons(path: &str) -> Result<Vec<Person>, Box<dyn Error>> {
+pub fn get_persons(path: &PathBuf, quiet: bool) -> Result<Vec<Person>, Box<dyn Error>> {
     let mut reader = csv::ReaderBuilder::new()
         .has_headers(false)
         .from_path(path)?;
@@ -27,8 +29,10 @@ pub fn get_persons(path: &str) -> Result<Vec<Person>, Box<dyn Error>> {
     for result in reader.deserialize() {
         if let Ok(person) = result {
             persons.push(person);
-        }
-        else {
+        } else {
+            if quiet {
+                continue
+            }
             let error = result.unwrap_err();
             eprintln!("error reading line: {:?}", error);
         }
