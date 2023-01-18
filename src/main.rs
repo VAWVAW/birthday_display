@@ -126,7 +126,7 @@ impl Application for BirthdayDisplay {
         let mut command = Command::none();
 
         if let Some(client) = reqwest_client {
-            let mut request_commands = vec![iced::window::maximize(true)];
+            let mut request_commands = Vec::new();
             for i in loadable_indexes {
                 let person: &Person = persons.get(i).unwrap();
                 request_commands.push(Command::perform(
@@ -168,7 +168,7 @@ impl Application for BirthdayDisplay {
                 }
             }
         }
-        Command::none()
+        iced::window::maximize(true)
     }
 
     fn view(&self) -> Element<Self::Message> {
