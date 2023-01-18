@@ -5,8 +5,8 @@ use chrono::{NaiveDate, Utc};
 use serde::Deserialize;
 
 use iced::widget::image::Handle;
-use iced::widget::{column, text, Column, Image, Text};
-use iced::{Alignment, Color, Element};
+use iced::widget::{column, container, text, Column, Image};
+use iced::{Alignment, Color, Element, Length};
 
 #[derive(Debug, Deserialize)]
 pub struct Person {
@@ -40,21 +40,17 @@ impl Person {
         let mut column: Column<Message> = column![text(banner_str).size(20)];
 
         if let Some(maybe_image) = &self.image_data {
-            match maybe_image {
+            let element: Element<Message> = match maybe_image {
                 Ok(image_data) => {
                     let image: Image = Image::new((*image_data).clone()).into();
-                    column = column.push(image);
+                    image.into()
                 }
                 Err(error) => {
-                    if !silent {
-                        let text: Text = text(error)
-                            .size(20)
-                            .style(Color::from_rgb(0.7, 0.0, 0.0))
-                            .into();
-                        column = column.push(text);
-                    }
+                    let text = if silent { text("") } else { text(error) };
+                    text.size(20).style(Color::from_rgb(0.7, 0.0, 0.0)).into()
                 }
             };
+            column = column.push(container(element).width(Length::Units(300)));
         }
 
         column.align_items(Alignment::Center).spacing(20).into()

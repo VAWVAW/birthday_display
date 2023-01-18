@@ -20,7 +20,7 @@ use iced::widget::image::Handle;
 use iced::widget::{container, row};
 use iced::{Application, Command, Element, Length, Settings, Subscription};
 
-#[derive(Parser)]
+#[derive(Parser, Default)]
 #[command(author, version, about, long_about = None)]
 #[command(group(ArgGroup::new("verbosity").args(["quiet", "verbose"])))]
 struct Cli {
@@ -126,7 +126,7 @@ impl Application for BirthdayDisplay {
         let mut command = Command::none();
 
         if let Some(client) = reqwest_client {
-            let mut request_commands = Vec::new();
+            let mut request_commands = vec![iced::window::maximize(true)];
             for i in loadable_indexes {
                 let person: &Person = persons.get(i).unwrap();
                 request_commands.push(Command::perform(
@@ -197,7 +197,15 @@ fn main() -> Result<(), ErrorDisplayWrapper> {
 
     let persons = get_persons(&cli.file, cli.quiet)?;
 
-    BirthdayDisplay::run(Settings::with_flags((cli, persons)))
+    let settings = Settings{
+        flags: (cli, persons),
+        window: iced::window::Settings {
+            decorations: false,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    BirthdayDisplay::run(settings)
         .map_err(|error| ErrorDisplayWrapper::from(Box::new(error) as Box<dyn Error>))?;
     Ok(())
 }
