@@ -1,18 +1,19 @@
 mod csv;
-mod person;
 mod error_wrapper;
+mod person;
 
-use crate::person::Person;
 use crate::csv::get_persons;
 use crate::error_wrapper::ErrorDisplayWrapper;
+use crate::person::Person;
 
 use std::borrow::Cow;
+use std::error::Error;
 use std::fmt::Debug;
 use std::path::PathBuf;
 
 use chrono::{Datelike, Utc};
+use clap::{ArgGroup, Parser};
 use reqwest::{Client, RequestBuilder};
-use clap::{Parser, ArgGroup};
 
 use iced::time::{every, Duration, Instant};
 use iced::widget::image::Handle;
@@ -33,7 +34,7 @@ struct Cli {
 
     /// hide errors in gui
     #[arg(short, long)]
-    silent: bool
+    silent: bool,
 }
 
 #[derive(Debug)]
@@ -118,7 +119,7 @@ impl Application for BirthdayDisplay {
                     }
                     None
                 }
-            }
+            },
         };
 
         // generate Command to load images async
@@ -191,13 +192,12 @@ impl Application for BirthdayDisplay {
     }
 }
 
-
-
 fn main() -> Result<(), ErrorDisplayWrapper> {
     let cli: Cli = Cli::parse();
 
     let persons = get_persons(&cli.file, cli.quiet)?;
 
-    BirthdayDisplay::run(Settings::with_flags((cli, persons)))?;
+    BirthdayDisplay::run(Settings::with_flags((cli, persons)))
+        .map_err(|error| ErrorDisplayWrapper::from(Box::new(error) as Box<dyn Error>))?;
     Ok(())
 }

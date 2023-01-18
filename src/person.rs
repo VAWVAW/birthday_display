@@ -1,12 +1,12 @@
-use crate::Message;
 use crate::csv::custom_date_format;
+use crate::Message;
 
 use chrono::{NaiveDate, Utc};
 use serde::Deserialize;
 
-use iced::{Alignment, Color, Element};
-use iced::widget::{Image, text, Text, column, Column};
 use iced::widget::image::Handle;
+use iced::widget::{column, text, Column, Image, Text};
+use iced::{Alignment, Color, Element};
 
 #[derive(Debug, Deserialize)]
 pub struct Person {
@@ -60,4 +60,3 @@ impl Person {
         column.align_items(Alignment::Center).spacing(20).into()
     }
 }
-

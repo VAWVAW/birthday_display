@@ -31,7 +31,7 @@ pub fn get_persons(path: &PathBuf, quiet: bool) -> Result<Vec<Person>, Box<dyn E
             persons.push(person);
         } else {
             if quiet {
-                continue
+                continue;
             }
             let error = result.unwrap_err();
             eprintln!("error reading line: {:?}", error);
