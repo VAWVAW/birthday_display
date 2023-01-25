@@ -24,18 +24,18 @@ pub fn get_persons(path: &PathBuf, quiet: bool) -> Result<Vec<Person>, Box<dyn E
     let mut reader = csv::ReaderBuilder::new()
         .has_headers(false)
         .from_path(path)?;
-    let mut persons: Vec<Person> = Vec::new();
 
-    for result in reader.deserialize() {
-        if let Ok(person) = result {
-            persons.push(person);
-        } else {
-            if quiet {
-                continue;
+    Ok(reader
+        .deserialize()
+        .filter_map(|result| {
+            if let Err(error) = result {
+                if !quiet {
+                    eprintln!("error reading line: {:?}", error)
+                };
+                None
+            } else {
+                result.ok()
             }
-            let error = result.unwrap_err();
-            eprintln!("error reading line: {:?}", error);
-        }
-    }
-    Ok(persons)
+        })
+        .collect())
 }

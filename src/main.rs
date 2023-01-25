@@ -78,13 +78,16 @@ struct BirthdayDisplay {
 impl BirthdayDisplay {
     fn update_day(&mut self) {
         let today = Utc::now().date_naive();
-        self.indexes_birthdays_today.clear();
 
-        for (i, person) in self.persons.iter().enumerate() {
-            if person.birthday.day() == today.day() && person.birthday.month() == today.month() {
-                self.indexes_birthdays_today.push(i);
-            }
-        }
+        self.indexes_birthdays_today = self
+            .persons
+            .iter()
+            .enumerate()
+            .filter(|(_, person)| {
+                person.birthday.day() == today.day() && person.birthday.month() == today.month()
+            })
+            .map(|(i, _)| i)
+            .collect();
     }
 }
 
@@ -98,15 +101,13 @@ impl Application for BirthdayDisplay {
         let (cli, persons) = flags;
 
         // prepare loading of images
-        let mut loadable_indexes: Vec<usize> = Vec::new();
-        for (i, person) in persons.iter().enumerate() {
-            if person.image_url.is_some() {
-                loadable_indexes.push(i);
-            }
-        }
+        let loadable_persons: Vec<&Person> = persons
+            .iter()
+            .filter(|person| person.image_url.is_some())
+            .collect();
 
         // try to generate reqwest client if needed
-        let reqwest_client = match loadable_indexes.len() {
+        let reqwest_client = match loadable_persons.len() {
             0 => None,
             _ => match Client::builder().build() {
                 Ok(client) => Some(client),
@@ -120,23 +121,25 @@ impl Application for BirthdayDisplay {
         };
 
         // generate Command to load images async
-        let mut command = Command::none();
-
-        if let Some(client) = reqwest_client {
-            let mut request_commands = Vec::new();
-            for i in loadable_indexes {
-                let person: &Person = persons.get(i).unwrap();
-                request_commands.push(Command::perform(
-                    request_birthday_image(
-                        client.get(person.image_url.as_ref().unwrap()),
-                        person.image_url.as_ref().unwrap().clone(),
-                        cli.verbose,
-                    ),
-                    |(data, url)| Message::DataReceived(data, url),
-                ));
-            }
-            command = Command::batch(request_commands);
-        }
+        let command = if let Some(client) = reqwest_client {
+            Command::batch(
+                loadable_persons
+                    .iter()
+                    .map(|person| {
+                        Command::perform(
+                            request_birthday_image(
+                                client.get(person.image_url.as_ref().unwrap()),
+                                person.image_url.as_ref().unwrap().clone(),
+                                cli.verbose,
+                            ),
+                            |(data, url)| Message::DataReceived(data, url),
+                        )
+                    })
+                    .collect::<Vec<Command<Message>>>(),
+            )
+        } else {
+            Command::none()
+        };
 
         // display initial data
         let mut birthday_display = Self {
@@ -158,22 +161,23 @@ impl Application for BirthdayDisplay {
             Message::UpdateDay(_) => self.update_day(),
             Message::DataReceived(image_data, orig_url) => {
                 let url = Some(orig_url);
-                for person in &mut self.persons {
-                    if person.image_url == url {
+                self.persons
+                    .iter_mut()
+                    .filter(|person| person.image_url == url)
+                    .for_each(|person| {
                         person.image_data.replace(image_data.clone());
-                    }
-                }
+                    });
             }
         }
         iced::window::maximize(true)
     }
 
     fn view(&self) -> Element<Self::Message> {
-        let mut elements = Vec::new();
-
-        for i in &self.indexes_birthdays_today {
-            elements.push(self.persons.get(*i).unwrap().view(self.cli.silent));
-        }
+        let elements = self
+            .indexes_birthdays_today
+            .iter()
+            .map(|i| self.persons.get(*i).unwrap().view(self.cli.silent))
+            .collect();
 
         container(row(elements).spacing(15))
             .padding(20)
