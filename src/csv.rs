@@ -9,7 +9,7 @@ pub mod custom_date_format {
     use chrono::NaiveDate;
     use serde::{self, Deserialize, Deserializer};
 
-    const FORMAT: &'static str = "%d.%m.%Y";
+    const FORMAT: &str = "%d.%m.%Y";
 
     pub fn deserialize<'de, D>(deserializer: D) -> Result<NaiveDate, D::Error>
     where

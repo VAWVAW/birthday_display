@@ -42,7 +42,7 @@ impl Person {
         if let Some(maybe_image) = &self.image_data {
             let element: Element<Message> = match maybe_image {
                 Ok(image_data) => {
-                    let image: Image = Image::new((*image_data).clone()).into();
+                    let image: Image = Image::new((*image_data).clone());
                     image.into()
                 }
                 Err(error) => {

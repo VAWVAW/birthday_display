@@ -11,6 +11,7 @@ use std::error::Error;
 use std::fmt::Debug;
 use std::path::PathBuf;
 
+use bytes::Bytes;
 use chrono::{Datelike, Utc};
 use clap::{ArgGroup, Parser};
 use reqwest::{Client, RequestBuilder};
@@ -48,15 +49,11 @@ async fn request_birthday_image(
     orig_url: String,
     verbosity: u8,
 ) -> (Result<Handle, String>, String) {
-    let result = match request.send().await {
-        Ok(response) => match response.error_for_status() {
-            Ok(response) => response.bytes().await,
-            Err(error) => Err(error),
-        },
-        Err(error) => Err(error),
-    };
+    async fn try_get_data(request: RequestBuilder) -> Result<Bytes, reqwest::Error> {
+        request.send().await?.error_for_status()?.bytes().await
+    }
 
-    let image_data = match result {
+    let image_data = match try_get_data(request).await {
         Ok(bytes) => {
             let cow: Cow<'_, [u8]> = Cow::from(bytes.to_vec());
             Ok(Handle::from_memory(cow))
@@ -197,10 +194,12 @@ fn main() -> Result<(), ErrorDisplayWrapper> {
 
     let persons = get_persons(&cli.file, cli.quiet)?;
 
-    let settings = Settings{
+    let settings = Settings {
         flags: (cli, persons),
         window: iced::window::Settings {
+            #[cfg(not(debug_assertions))]
             decorations: false,
+
             ..Default::default()
         },
         ..Default::default()
