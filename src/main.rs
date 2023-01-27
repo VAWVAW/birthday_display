@@ -38,9 +38,12 @@ struct Cli {
     silent: bool,
 }
 
+/// Types of updates for the BirthdayDisplay application.
 #[derive(Debug)]
 pub enum Message {
+    /// Periodic update with the time that has passed.
     UpdateDay(Instant),
+    /// Data with the associated url as second String.
     DataReceived(Result<Handle, String>, String),
 }
 

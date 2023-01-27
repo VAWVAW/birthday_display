@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
 
-/// A wrapper the map the Debug trait to Display
+/// A wrapper that map the Debug trait to Display
 pub struct ErrorDisplayWrapper {
     error: Box<dyn Error>,
 }

@@ -8,6 +8,7 @@ use iced::widget::image::Handle;
 use iced::widget::{column, container, text, Column, Image};
 use iced::{Alignment, Color, Element, Length};
 
+/// Represents a person with a birthday an a custom image to be displayed.
 #[derive(Debug, Deserialize)]
 pub struct Person {
     last_name: String,
@@ -21,6 +22,7 @@ pub struct Person {
 }
 
 impl Person {
+    /// Generates a visual representation of the person for iced.
     pub fn view(&self, silent: bool) -> Element<Message> {
         let pronoun = match self.gender {
             'm' | 'M' => "Herr ",
