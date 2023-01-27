@@ -60,7 +60,7 @@ async fn request_birthday_image(
         }
         Err(error) => {
             if verbosity > 0 {
-                println!("error loading image: {}", error);
+                println!("error loading image: {error}");
             }
             Err(String::from("[failed to load image]"))
         }
@@ -113,7 +113,7 @@ impl Application for BirthdayDisplay {
                 Ok(client) => Some(client),
                 Err(error) => {
                     if cli.verbose > 0 {
-                        println!("error while initializing web client: {}", error);
+                        println!("error while initializing web client: {error}");
                     }
                     None
                 }
@@ -176,7 +176,7 @@ impl Application for BirthdayDisplay {
         let elements = self
             .indexes_birthdays_today
             .iter()
-            .map(|i| self.persons.get(*i).unwrap().view(self.cli.silent))
+            .map(|i| self.persons[*i].view(self.cli.silent))
             .collect();
 
         container(row(elements).spacing(15))
