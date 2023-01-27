@@ -30,7 +30,7 @@ pub fn get_persons(path: &PathBuf, quiet: bool) -> Result<Vec<Person>, Box<dyn E
         .filter_map(|result| {
             if let Err(error) = result {
                 if !quiet {
-                    eprintln!("error reading line: {:?}", error)
+                    eprintln!("error reading line: {error:?}");
                 };
                 None
             } else {

@@ -3,6 +3,7 @@ name = "birthday_display"
 version = "0.1.0"
 edition = "2021"
 description = "A program to display birthdays from csv file"
+license-file = "LICENSE"
 
 [features]
 glow = [ "iced/glow" ]
