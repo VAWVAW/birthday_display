@@ -5,6 +5,10 @@ edition = "2021"
 description = "A program to display birthdays from csv file"
 license-file = "LICENSE"
 
+[profile.release]
+strip = true
+lto = true
+
 [features]
 glow = [ "iced/glow" ]
 
