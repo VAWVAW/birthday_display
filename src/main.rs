@@ -7,6 +7,7 @@ use crate::error_wrapper::ErrorDisplayWrapper;
 use crate::person::Person;
 
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::Debug;
 use std::path::PathBuf;
@@ -40,6 +41,7 @@ struct Cli {
 
 /// Types of updates for the BirthdayDisplay application.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum Message {
     /// Periodic update with the time that has passed.
     UpdateDay(Instant),
@@ -73,25 +75,8 @@ async fn request_birthday_image(
 }
 
 struct BirthdayDisplay {
-    persons: Vec<Person>,
-    indexes_birthdays_today: Vec<usize>,
+    persons_by_birthday: HashMap<(u32, u32), Vec<Person>>,
     cli: Cli,
-}
-
-impl BirthdayDisplay {
-    fn update_day(&mut self) {
-        let today = Utc::now().date_naive();
-
-        self.indexes_birthdays_today = self
-            .persons
-            .iter()
-            .enumerate()
-            .filter(|(_, person)| {
-                person.birthday.day() == today.day() && person.birthday.month() == today.month()
-            })
-            .map(|(i, _)| i)
-            .collect();
-    }
 }
 
 impl Application for BirthdayDisplay {
@@ -144,15 +129,22 @@ impl Application for BirthdayDisplay {
             Command::none()
         };
 
-        // display initial data
-        let mut birthday_display = Self {
-            persons,
-            cli,
-            indexes_birthdays_today: Vec::new(),
-        };
-        birthday_display.update_day();
+        let mut persons_by_birthday: HashMap<(u32, u32), Vec<Person>> = HashMap::new();
+        for person in persons {
+            let key = (person.birthday.day(), person.birthday.month());
 
-        (birthday_display, command)
+            persons_by_birthday.entry(key).or_default();
+
+            persons_by_birthday.get_mut(&key).unwrap().push(person);
+        }
+
+        (
+            Self {
+                persons_by_birthday,
+                cli,
+            },
+            command,
+        )
     }
 
     fn title(&self) -> String {
@@ -160,27 +152,32 @@ impl Application for BirthdayDisplay {
     }
 
     fn update(&mut self, message: Self::Message) -> Command<Message> {
-        match message {
-            Message::UpdateDay(_) => self.update_day(),
-            Message::DataReceived(image_data, orig_url) => {
-                let url = Some(orig_url);
-                self.persons
-                    .iter_mut()
-                    .filter(|person| person.image_url == url)
-                    .for_each(|person| {
-                        person.image_data.replace(image_data.clone());
-                    });
-            }
+        if let Message::DataReceived(image_data, orig_url) = message {
+            let url = Some(orig_url);
+            self.persons_by_birthday
+                .iter_mut()
+                .flat_map(|(_, persons)| persons.iter_mut())
+                .filter(|person| person.image_url == url)
+                .for_each(|person| {
+                    person.image_data.replace(image_data.clone());
+                });
         }
         iced::window::maximize(true)
     }
 
     fn view(&self) -> Element<Self::Message> {
-        let elements = self
-            .indexes_birthdays_today
-            .iter()
-            .map(|i| self.persons[*i].view(self.cli.silent))
-            .collect();
+        let today = Utc::now().date_naive();
+        let key = (today.day(), today.month());
+
+        let maybe_persons_today = self.persons_by_birthday.get(&key);
+
+        let elements: Vec<Element<Message>> = match maybe_persons_today {
+            Some(persons_today) => persons_today
+                .iter()
+                .map(|person| person.view(self.cli.silent))
+                .collect(),
+            None => Vec::new(),
+        };
 
         container(row(elements).spacing(15))
             .padding(20)
@@ -192,7 +189,7 @@ impl Application for BirthdayDisplay {
     }
 
     fn subscription(&self) -> Subscription<Self::Message> {
-        every(Duration::from_secs(60)).map(Message::UpdateDay)
+        every(Duration::from_secs(5)).map(Message::UpdateDay)
     }
 }
 

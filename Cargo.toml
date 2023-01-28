@@ -11,6 +11,7 @@ lto = true
 
 [features]
 glow = [ "iced/glow" ]
+debug = [ "iced/debug" ]
 
 [dependencies]
 csv = "1"
