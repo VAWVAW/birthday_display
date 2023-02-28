@@ -198,17 +198,7 @@ fn main() -> Result<(), ErrorDisplayWrapper> {
 
     let persons = get_persons(&cli.file, cli.quiet)?;
 
-    let settings = Settings {
-        flags: (cli, persons),
-        window: iced::window::Settings {
-            #[cfg(not(debug_assertions))]
-            decorations: false,
-
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-    BirthdayDisplay::run(settings)
+    BirthdayDisplay::run(Settings::with_flags((cli, persons)))
         .map_err(|error| ErrorDisplayWrapper::from(Box::new(error) as Box<dyn Error>))?;
     Ok(())
 }
