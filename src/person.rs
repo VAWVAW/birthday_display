@@ -52,7 +52,7 @@ impl Person {
                     text.size(20).style(Color::from_rgb(0.7, 0.0, 0.0)).into()
                 }
             };
-            column = column.push(container(element).width(Length::Units(300)));
+            column = column.push(container(element).width(Length::Fixed(300.0)));
         }
 
         column.align_items(Alignment::Center).spacing(20).into()
